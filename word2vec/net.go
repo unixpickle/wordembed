@@ -2,6 +2,7 @@
 package word2vec
 
 import (
+	"math"
 	"sort"
 
 	"github.com/unixpickle/anydiff"
@@ -21,6 +22,23 @@ type Net struct {
 
 	// Decoder is the row-major output matrix.
 	Decoder *anydiff.Var
+}
+
+// NewNet creates a new, randomized network with the given
+// dimensions.
+func NewNet(c anyvec.Creator, in, hidden, out int) *Net {
+	res := &Net{
+		In:      in,
+		Hidden:  hidden,
+		Out:     out,
+		Encoder: anydiff.NewVar(c.MakeVector(in * hidden)),
+		Decoder: anydiff.NewVar(c.MakeVector(hidden * out)),
+	}
+	anyvec.Rand(res.Encoder.Vector, anyvec.Normal, nil)
+	anyvec.Rand(res.Decoder.Vector, anyvec.Normal, nil)
+	scaler := c.MakeNumeric(math.Sqrt(1 / float64(hidden)))
+	res.Decoder.Vector.Scale(scaler)
+	return res
 }
 
 // Step performs a step of gradient descent for the sparse
@@ -65,10 +83,11 @@ func (n *Net) forward(in, desired map[int]anyvec.Numeric) (hidden, out anyvec.Ve
 	}
 	var outNums []anyvec.Vector
 	for _, i := range sortedKeys(desired) {
-		outRow := n.Decoder.Vector.Slice(i*n.Out, (i+1)*n.Out)
+		outRow := n.Decoder.Vector.Slice(i*n.Hidden, (i+1)*n.Hidden)
 		dot := outRow.Dot(hidden)
 		num := outRow.Creator().MakeVector(1)
 		num.AddScaler(dot)
+		outNums = append(outNums, num)
 	}
 	out = hidden.Creator().Concat(outNums...)
 	return
@@ -109,6 +128,7 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 
 		scaledU := hiddenGrad.Copy()
 		scaledU.Scale(scaler)
+		scaledU.Scale(stepSize)
 		row.Add(scaledU)
 		n.Encoder.Vector.SetSlice(rowStart, row)
 	}
