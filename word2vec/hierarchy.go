@@ -1,6 +1,9 @@
 package word2vec
 
-import "github.com/unixpickle/splaytree"
+import (
+	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/splaytree"
+)
 
 // Hierarchy is used to encode words for a hierarchical
 // softmax layer.
@@ -21,6 +24,30 @@ func BuildHierarchy(words map[string]float64) Hierarchy {
 	res := Hierarchy{}
 	nodeIdx := 1
 	node.PutInHierarchy(res, nil, &nodeIdx)
+	return res
+}
+
+// DesiredOuts takes a bag of words and produces a sparse
+// vector of target probabilities for the hierarchical
+// softmax.
+func (h Hierarchy) DesiredOuts(c anyvec.Creator, words []string) map[int]anyvec.Numeric {
+	numVisits := map[int]int{}
+	numRights := map[int]int{}
+	for _, w := range words {
+		for _, node := range h[w] {
+			if node < 0 {
+				numVisits[-node]++
+			} else {
+				numVisits[node]++
+				numRights[node]++
+			}
+		}
+	}
+	res := map[int]anyvec.Numeric{}
+	for k, v := range numVisits {
+		rightProb := float64(numRights[k]) / float64(v)
+		res[k] = c.MakeNumeric(rightProb)
+	}
 	return res
 }
 
