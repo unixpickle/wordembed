@@ -1,6 +1,8 @@
 package word2vec
 
 import (
+	"fmt"
+	"math/rand"
 	"reflect"
 	"testing"
 )
@@ -20,5 +22,16 @@ func TestHierarchy(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("expected %v but got %v", expected, actual)
+	}
+}
+
+func BenchmarkHierarchy(b *testing.B) {
+	words := map[string]float64{}
+	for i := 0; i < 5000; i++ {
+		words[fmt.Sprintf("%d", i)] = rand.NormFloat64()
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		BuildHierarchy(words)
 	}
 }
