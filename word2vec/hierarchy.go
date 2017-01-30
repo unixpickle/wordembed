@@ -1,9 +1,18 @@
 package word2vec
 
 import (
+	"encoding/json"
+	"errors"
+
 	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/serializer"
 	"github.com/unixpickle/splaytree"
 )
+
+func init() {
+	var h Hierarchy
+	serializer.RegisterTypedDeserializer(h.SerializerType(), DeserializeHierarchy)
+}
 
 // Hierarchy is used to encode words for a hierarchical
 // softmax layer.
@@ -15,6 +24,15 @@ import (
 // If the node index is negative, then the layer should
 // opt to go left (negative) at the node.
 type Hierarchy map[string][]int
+
+// DeserializeHierarchy deserializes a Hierarchy.
+func DeserializeHierarchy(d []byte) (Hierarchy, error) {
+	var res Hierarchy
+	if err := json.Unmarshal(d, &res); err != nil {
+		return nil, errors.New("deserialize hierarchy: " + err.Error())
+	}
+	return res, nil
+}
 
 // BuildHierarchy builds a hierarchy using Huffman coding.
 // The word list is represented as a map from words to
@@ -49,6 +67,17 @@ func (h Hierarchy) DesiredOuts(c anyvec.Creator, words []string) map[int]anyvec.
 		res[k] = c.MakeNumeric(rightProb)
 	}
 	return res
+}
+
+// SerializerType returns the unique ID used to serialize
+// a Hierarchy.
+func (h Hierarchy) SerializerType() string {
+	return "github.com/unixpickle/wordembed/word2vec.Hierarchy"
+}
+
+// Serialize serializes the Hierarchy.
+func (h Hierarchy) Serialize() ([]byte, error) {
+	return json.Marshal(h)
 }
 
 func buildHuffman(words map[string]float64) *huffmanNode {

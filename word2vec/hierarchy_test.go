@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/unixpickle/serializer"
 )
 
 func TestHierarchy(t *testing.T) {
@@ -19,6 +21,26 @@ func TestHierarchy(t *testing.T) {
 		"b": []int{1, -2},
 		"c": []int{1, 2, -3},
 		"d": []int{1, 2, 3},
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("expected %v but got %v", expected, actual)
+	}
+}
+
+func TestHierarchySerialize(t *testing.T) {
+	expected := Hierarchy{
+		"a": []int{-1},
+		"b": []int{1, -2},
+		"c": []int{1, 2, -3},
+		"d": []int{1, 2, 3},
+	}
+	data, err := serializer.SerializeAny(expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual Hierarchy
+	if err := serializer.DeserializeAny(data, &actual); err != nil {
+		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Errorf("expected %v but got %v", expected, actual)
