@@ -164,6 +164,8 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 	outIndices []int, output *gradient) {
 	var hiddenGrad anyvec.Vector
 
+	tempRow := out.Creator().MakeVector(n.Hidden)
+
 	// Propagate through the decoder weights.
 	for i, outIndex := range outIndices {
 		rowStart := outIndex * n.Hidden
@@ -175,29 +177,29 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 			hiddenGrad = row.Copy()
 			hiddenGrad.Scale(upstreamScaler)
 		} else {
-			rc := row.Copy()
-			rc.Scale(upstreamScaler)
-			hiddenGrad.Add(rc)
+			tempRow.Set(row)
+			tempRow.Scale(upstreamScaler)
+			hiddenGrad.Add(tempRow)
 		}
 
-		rowGrad := hidden.Copy()
-		rowGrad.Scale(upstreamScaler)
+		tempRow.Set(hidden)
+		tempRow.Scale(upstreamScaler)
 
 		if vec, ok := output.OutGrads[outIndex]; ok {
-			vec.Add(rowGrad)
+			vec.Add(tempRow)
 		} else {
-			output.OutGrads[outIndex] = rowGrad
+			output.OutGrads[outIndex] = tempRow.Copy()
 		}
 	}
 
 	// Propagate through the hidden layer.
 	for inIndex, scaler := range in {
-		scaledU := hiddenGrad.Copy()
-		scaledU.Scale(scaler)
+		tempRow.Set(hiddenGrad)
+		tempRow.Scale(scaler)
 		if vec, ok := output.InGrads[inIndex]; ok {
-			vec.Add(scaledU)
+			vec.Add(tempRow)
 		} else {
-			output.InGrads[inIndex] = scaledU
+			output.InGrads[inIndex] = tempRow.Copy()
 		}
 	}
 }
