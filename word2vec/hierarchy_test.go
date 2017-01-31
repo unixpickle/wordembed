@@ -27,6 +27,17 @@ func TestHierarchy(t *testing.T) {
 	}
 }
 
+func TestHierarchyLarge(t *testing.T) {
+	words := map[string]float64{}
+	for i := 0; i < 10000; i++ {
+		words[fmt.Sprintf("%d", i/5)] = float64(rand.Intn(10)+1) / 10
+	}
+	hier := BuildHierarchy(words)
+	if len(hier) != len(words) {
+		t.Errorf("expected len %d but got len %d", len(words), len(hier))
+	}
+}
+
 func TestHierarchySerialize(t *testing.T) {
 	expected := Hierarchy{
 		"a": []int{-1},
