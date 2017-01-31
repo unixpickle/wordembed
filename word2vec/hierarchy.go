@@ -54,10 +54,10 @@ func (h Hierarchy) DesiredOuts(c anyvec.Creator, words []string) map[int]anyvec.
 	for _, w := range words {
 		for _, node := range h[w] {
 			if node < 0 {
-				numVisits[-node]++
+				numVisits[-node-1]++
 			} else {
-				numVisits[node]++
-				numRights[node]++
+				numVisits[node-1]++
+				numRights[node-1]++
 			}
 		}
 	}
