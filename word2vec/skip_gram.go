@@ -15,7 +15,6 @@ type SkipGram struct {
 	Net       *Net
 	Hierarchy Hierarchy
 	Samples   []*Sample
-	BatchSize int
 
 	// StepSize should be negative for gradient descent.
 	StepSize anyvec.Numeric
@@ -47,22 +46,15 @@ func (s *SkipGram) Train(done <-chan struct{}) {
 		default:
 		}
 
-		var ins, desireds []map[int]anyvec.Numeric
+		sample := s.Samples[rand.Intn(len(s.Samples))]
+		radius := rand.Intn(s.MaxDist-s.MinDist+1) + s.MinDist
+		sample = sample.Trim(radius)
 
-		for i := 0; i < s.BatchSize; i++ {
-			sample := s.Samples[rand.Intn(len(s.Samples))]
-			radius := rand.Intn(s.MaxDist-s.MinDist+1) + s.MinDist
-			sample = sample.Trim(radius)
+		in := map[int]anyvec.Numeric{w2i[sample.Word]: one}
+		allWords := append(append([]string{}, sample.Left...), sample.Right...)
+		desired := s.Hierarchy.DesiredOuts(creator, allWords)
 
-			in := map[int]anyvec.Numeric{w2i[sample.Word]: one}
-			allWords := append(append([]string{}, sample.Left...), sample.Right...)
-			desired := s.Hierarchy.DesiredOuts(creator, allWords)
-
-			ins = append(ins, in)
-			desireds = append(desireds, desired)
-		}
-
-		cost := s.Net.Step(ins, desireds, s.StepSize)
+		cost := s.Net.Step(in, desired, s.StepSize)
 		if s.StatusFunc != nil {
 			s.StatusFunc(cost)
 		}

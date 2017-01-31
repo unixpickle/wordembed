@@ -66,59 +66,36 @@ func NewNet(c anyvec.Creator, in, hidden, out int) *Net {
 	return res
 }
 
-// Step performs a step of gradient descent for the batch
-// of sparse inputs and the desired sparse outputs.
+// Step performs a step of gradient descent for the sparse
+// input and desired output.
 //
-// It returns the average cost before the step was taken.
+// It returns the cost before the step was taken.
 //
 // For gradient descent, the provided step size should be
 // negative.
-func (n *Net) Step(ins, desireds []map[int]anyvec.Numeric, step anyvec.Numeric) anyvec.Numeric {
-	if len(ins) == 0 {
-		panic("batch size cannot be 0")
+func (n *Net) Step(in, desired map[int]anyvec.Numeric, step anyvec.Numeric) anyvec.Numeric {
+	if len(in) == 0 {
+		panic("cannot have empty input")
 	}
-	if len(ins) != len(desireds) {
-		panic("input and desired lengths must match")
-	}
-
-	var totalCost anyvec.Vector
-	batchGrad := newGradient()
-	for i, in := range ins {
-		desired := desireds[i]
-		if len(in) == 0 {
-			panic("cannot have empty input")
-		}
-		if len(desired) == 0 {
-			panic("cannot have empty desired output")
-		}
-
-		hidden, out := n.forward(in, desired)
-		actualRes := anydiff.NewVar(out)
-		desiredRes := sparseVectorRes(out.Creator(), desired)
-
-		cost := anynet.SigmoidCE{}.Cost(desiredRes, actualRes, 1)
-		upstream := out.Creator().MakeVector(1)
-		upstream.AddScaler(out.Creator().MakeNumeric(1 / float64(len(ins))))
-		grad := anydiff.NewGrad(actualRes)
-		cost.Propagate(upstream, grad)
-
-		outGrad := grad[actualRes]
-
-		n.backward(in, hidden, out, outGrad, sortedKeys(desired), batchGrad)
-
-		if totalCost == nil {
-			totalCost = cost.Output().Copy()
-		} else {
-			totalCost.Add(cost.Output())
-		}
+	if len(desired) == 0 {
+		panic("cannot have empty desired output")
 	}
 
-	batchGrad.Scale(step)
-	n.addGradient(batchGrad)
+	hidden, out := n.forward(in, desired)
+	actualRes := anydiff.NewVar(out)
+	desiredRes := sparseVectorRes(out.Creator(), desired)
 
-	scaler := totalCost.Creator().MakeNumeric(1 / float64(len(ins)))
-	totalCost.Scale(scaler)
-	return anyvec.Sum(totalCost)
+	cost := anynet.SigmoidCE{}.Cost(desiredRes, actualRes, 1)
+	upstream := out.Creator().MakeVector(1)
+	upstream.AddScaler(out.Creator().MakeNumeric(1))
+	grad := anydiff.NewGrad(actualRes)
+	cost.Propagate(upstream, grad)
+
+	outGrad := grad[actualRes]
+
+	n.backward(in, hidden, out, outGrad, sortedKeys(desired), step)
+
+	return anyvec.Sum(cost.Output())
 }
 
 // SerializerType returns the unique ID used to serialize
@@ -139,20 +116,21 @@ func (n *Net) Serialize() ([]byte, error) {
 }
 
 func (n *Net) forward(in, desired map[int]anyvec.Numeric) (hidden, out anyvec.Vector) {
+	temp := n.Encoder.Vector.Creator().MakeVector(n.Hidden)
 	for i, v := range in {
-		slice := n.Encoder.Vector.Slice(i*n.Hidden, (i+1)*n.Hidden)
-		slice.Scale(v)
+		temp.SetSlice(-i*n.Hidden, n.Encoder.Vector)
+		temp.Scale(v)
 		if hidden == nil {
-			hidden = slice
+			hidden = temp.Copy()
 		} else {
-			hidden.Add(slice)
+			hidden.Add(temp)
 		}
 	}
 	var outNums []anyvec.Vector
 	for _, i := range sortedKeys(desired) {
-		outRow := n.Decoder.Vector.Slice(i*n.Hidden, (i+1)*n.Hidden)
-		dot := outRow.Dot(hidden)
-		num := outRow.Creator().MakeVector(1)
+		temp.SetSlice(-i*n.Hidden, n.Decoder.Vector)
+		dot := temp.Dot(hidden)
+		num := temp.Creator().MakeVector(1)
 		num.AddScaler(dot)
 		outNums = append(outNums, num)
 	}
@@ -161,61 +139,46 @@ func (n *Net) forward(in, desired map[int]anyvec.Numeric) (hidden, out anyvec.Ve
 }
 
 func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Vector,
-	outIndices []int, output *gradient) {
+	outIndices []int, stepSize anyvec.Numeric) {
 	var hiddenGrad anyvec.Vector
+
+	tempGrad := out.Creator().MakeVector(n.Hidden)
+	tempOldRow := out.Creator().MakeVector(n.Hidden)
 
 	// Propagate through the decoder weights.
 	for i, outIndex := range outIndices {
 		rowStart := outIndex * n.Hidden
-		rowEnd := (outIndex + 1) * n.Hidden
-		row := n.Decoder.Vector.Slice(rowStart, rowEnd)
+		tempOldRow.SetSlice(-rowStart, n.Decoder.Vector)
 		upstreamScaler := anyvec.Sum(outGrad.Slice(i, i+1))
 
 		if hiddenGrad == nil {
-			hiddenGrad = row.Copy()
+			hiddenGrad = tempOldRow.Copy()
 			hiddenGrad.Scale(upstreamScaler)
 		} else {
-			rc := row.Copy()
-			rc.Scale(upstreamScaler)
-			hiddenGrad.Add(rc)
+			tempGrad.Set(tempOldRow)
+			tempGrad.Scale(upstreamScaler)
+			hiddenGrad.Add(tempGrad)
 		}
 
-		rowGrad := hidden.Copy()
-		rowGrad.Scale(upstreamScaler)
+		tempGrad.Set(hidden)
+		tempGrad.Scale(upstreamScaler)
+		tempGrad.Scale(stepSize)
 
-		if vec, ok := output.OutGrads[outIndex]; ok {
-			vec.Add(rowGrad)
-		} else {
-			output.OutGrads[outIndex] = rowGrad
-		}
+		tempOldRow.Add(tempGrad)
+		n.Decoder.Vector.SetSlice(rowStart, tempOldRow)
 	}
 
 	// Propagate through the hidden layer.
 	for inIndex, scaler := range in {
-		scaledU := hiddenGrad.Copy()
-		scaledU.Scale(scaler)
-		if vec, ok := output.InGrads[inIndex]; ok {
-			vec.Add(scaledU)
-		} else {
-			output.InGrads[inIndex] = scaledU
-		}
-	}
-}
-
-func (n *Net) addGradient(g *gradient) {
-	for outIndex, rowGrad := range g.OutGrads {
-		rowStart := outIndex * n.Hidden
-		rowEnd := (outIndex + 1) * n.Hidden
-		row := n.Decoder.Vector.Slice(rowStart, rowEnd)
-		row.Add(rowGrad)
-		n.Decoder.Vector.SetSlice(rowStart, row)
-	}
-	for inIndex, rowGrad := range g.InGrads {
 		rowStart := inIndex * n.Hidden
-		rowEnd := (inIndex + 1) * n.Hidden
-		row := n.Encoder.Vector.Slice(rowStart, rowEnd)
-		row.Add(rowGrad)
-		n.Encoder.Vector.SetSlice(rowStart, row)
+		tempOldRow.SetSlice(-rowStart, n.Encoder.Vector)
+
+		tempGrad.Set(hiddenGrad)
+		tempGrad.Scale(scaler)
+		tempGrad.Scale(stepSize)
+
+		tempOldRow.Add(tempGrad)
+		n.Encoder.Vector.SetSlice(rowStart, tempOldRow)
 	}
 }
 
@@ -236,25 +199,4 @@ func sortedKeys(m map[int]anyvec.Numeric) []int {
 	}
 	sort.Ints(res)
 	return res
-}
-
-type gradient struct {
-	InGrads  map[int]anyvec.Vector
-	OutGrads map[int]anyvec.Vector
-}
-
-func newGradient() *gradient {
-	return &gradient{
-		InGrads:  map[int]anyvec.Vector{},
-		OutGrads: map[int]anyvec.Vector{},
-	}
-}
-
-func (g *gradient) Scale(s anyvec.Numeric) {
-	for _, v := range g.InGrads {
-		v.Scale(s)
-	}
-	for _, v := range g.OutGrads {
-		v.Scale(s)
-	}
 }
