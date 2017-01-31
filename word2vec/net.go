@@ -96,7 +96,7 @@ func (n *Net) Step(ins, desireds []map[int]anyvec.Numeric, step anyvec.Numeric) 
 		actualRes := anydiff.NewVar(out)
 		desiredRes := sparseVectorRes(out.Creator(), desired)
 
-		cost := anynet.SigmoidCE{}.Cost(actualRes, desiredRes, 1)
+		cost := anynet.SigmoidCE{}.Cost(desiredRes, actualRes, 1)
 		upstream := out.Creator().MakeVector(1)
 		upstream.AddScaler(out.Creator().MakeNumeric(1 / float64(len(ins))))
 		grad := anydiff.NewGrad(actualRes)
