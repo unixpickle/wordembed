@@ -16,6 +16,7 @@ type SkipGram struct {
 	Hierarchy Hierarchy
 	Samples   []*Sample
 	StepSize  anyvec.Numeric
+	BatchSize int
 
 	// The minimum and maximum number of neighbors to use as
 	// context during training.
@@ -44,15 +45,22 @@ func (s *SkipGram) Train(done <-chan struct{}) {
 		default:
 		}
 
-		sample := s.Samples[rand.Intn(len(s.Samples))]
-		radius := rand.Intn(s.MaxDist-s.MinDist+1) + s.MinDist
-		sample = sample.Trim(radius)
+		var ins, desireds []map[int]anyvec.Numeric
 
-		in := map[int]anyvec.Numeric{w2i[sample.Word]: one}
-		allWords := append(append([]string{}, sample.Left...), sample.Right...)
-		desired := s.Hierarchy.DesiredOuts(creator, allWords)
+		for i := 0; i < s.BatchSize; i++ {
+			sample := s.Samples[rand.Intn(len(s.Samples))]
+			radius := rand.Intn(s.MaxDist-s.MinDist+1) + s.MinDist
+			sample = sample.Trim(radius)
 
-		cost := s.Net.Step(in, desired, s.StepSize)
+			in := map[int]anyvec.Numeric{w2i[sample.Word]: one}
+			allWords := append(append([]string{}, sample.Left...), sample.Right...)
+			desired := s.Hierarchy.DesiredOuts(creator, allWords)
+
+			ins = append(ins, in)
+			desireds = append(desireds, desired)
+		}
+
+		cost := s.Net.Step(ins, desireds, s.StepSize)
 		if s.StatusFunc != nil {
 			s.StatusFunc(cost)
 		}
