@@ -69,6 +69,22 @@ func (h Hierarchy) DesiredOuts(c anyvec.Creator, words []string) map[int]anyvec.
 	return res
 }
 
+// NumNodes computes the total number of node IDs.
+func (h Hierarchy) NumNodes() int {
+	var max int
+	for _, x := range h {
+		for _, k := range x {
+			if k < 0 {
+				k *= -1
+			}
+			if k > max {
+				max = k
+			}
+		}
+	}
+	return max
+}
+
 // SerializerType returns the unique ID used to serialize
 // a Hierarchy.
 func (h Hierarchy) SerializerType() string {
