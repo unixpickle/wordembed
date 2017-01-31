@@ -15,8 +15,10 @@ type SkipGram struct {
 	Net       *Net
 	Hierarchy Hierarchy
 	Samples   []*Sample
-	StepSize  anyvec.Numeric
 	BatchSize int
+
+	// StepSize should be negative for gradient descent.
+	StepSize anyvec.Numeric
 
 	// The minimum and maximum number of neighbors to use as
 	// context during training.
