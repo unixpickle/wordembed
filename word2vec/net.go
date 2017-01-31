@@ -169,19 +169,19 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 		rowStart := outIndex * n.Hidden
 		rowEnd := (outIndex + 1) * n.Hidden
 		row := n.Decoder.Vector.Slice(rowStart, rowEnd)
-		upstreamComp := outGrad.Slice(i, i+1)
+		upstreamScaler := anyvec.Sum(outGrad.Slice(i, i+1))
 
 		if hiddenGrad == nil {
 			hiddenGrad = row.Copy()
-			anyvec.ScaleRepeated(hiddenGrad, upstreamComp)
+			hiddenGrad.Scale(upstreamScaler)
 		} else {
 			rc := row.Copy()
-			anyvec.ScaleRepeated(rc, upstreamComp)
+			rc.Scale(upstreamScaler)
 			hiddenGrad.Add(rc)
 		}
 
 		rowGrad := hidden.Copy()
-		anyvec.ScaleRepeated(rowGrad, upstreamComp)
+		rowGrad.Scale(upstreamScaler)
 
 		if vec, ok := output.OutGrads[outIndex]; ok {
 			vec.Add(rowGrad)
