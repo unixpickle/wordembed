@@ -138,14 +138,33 @@ type treeValue struct {
 }
 
 func (t treeValue) Compare(v2 splaytree.Value) int {
+	if t == v2 {
+		return 0
+	}
+
 	p1 := t.Prob
 	p2 := v2.(treeValue).Prob
 	if p1 < p2 {
 		return -1
-	} else if p1 == p2 {
-		return 0
-	} else {
+	} else if p1 > p2 {
 		return 1
+	}
+
+	// Tie breaker
+	leftNode := t.Node
+	for leftNode.Left != nil {
+		leftNode = leftNode.Left
+	}
+	leftNode1 := v2.(treeValue).Node
+	for leftNode1.Left != nil {
+		leftNode1 = leftNode1.Left
+	}
+	if leftNode.Word < leftNode1.Word {
+		return -1
+	} else if leftNode.Word > leftNode1.Word {
+		return 1
+	} else {
+		panic("should not equal")
 	}
 }
 
