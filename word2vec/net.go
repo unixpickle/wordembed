@@ -2,13 +2,21 @@
 package word2vec
 
 import (
+	"errors"
 	"math"
 	"sort"
 
 	"github.com/unixpickle/anydiff"
 	"github.com/unixpickle/anynet"
 	"github.com/unixpickle/anyvec"
+	"github.com/unixpickle/anyvec/anyvecsave"
+	"github.com/unixpickle/serializer"
 )
+
+func init() {
+	var n Net
+	serializer.RegisterTypedDeserializer(n.SerializerType(), DeserializeNet)
+}
 
 // A Net is the encoder/decoder network used to train a
 // word2vec model.
@@ -22,6 +30,23 @@ type Net struct {
 
 	// Decoder is the row-major output matrix.
 	Decoder *anydiff.Var
+}
+
+// DeserializeNet deserializes a Net.
+func DeserializeNet(d []byte) (*Net, error) {
+	var in, hidden, out serializer.Int
+	var encoder, decoder *anyvecsave.S
+	err := serializer.DeserializeAny(d, &in, &hidden, &out, &encoder, &decoder)
+	if err != nil {
+		return nil, errors.New("deserialize net: " + err.Error())
+	}
+	return &Net{
+		In:      int(in),
+		Hidden:  int(hidden),
+		Out:     int(out),
+		Encoder: anydiff.NewVar(encoder.Vector),
+		Decoder: anydiff.NewVar(decoder.Vector),
+	}, nil
 }
 
 // NewNet creates a new, randomized network with the given
@@ -69,6 +94,23 @@ func (n *Net) Step(in, desired map[int]anyvec.Numeric, stepSize anyvec.Numeric) 
 
 	n.backward(in, hidden, out, outGrad, sortedKeys(desired), stepSize)
 	return anyvec.Sum(cost.Output())
+}
+
+// SerializerType returns the unique ID used to serialize
+// a Net with the serializer package.
+func (n *Net) SerializerType() string {
+	return "github.com/unixpickle/wordembed/word2vec.Net"
+}
+
+// Serialize serializes the Net.
+func (n *Net) Serialize() ([]byte, error) {
+	return serializer.SerializeAny(
+		serializer.Int(n.In),
+		serializer.Int(n.Hidden),
+		serializer.Int(n.Out),
+		&anyvecsave.S{Vector: n.Encoder.Vector},
+		&anyvecsave.S{Vector: n.Decoder.Vector},
+	)
 }
 
 func (n *Net) forward(in, desired map[int]anyvec.Numeric) (hidden, out anyvec.Vector) {
