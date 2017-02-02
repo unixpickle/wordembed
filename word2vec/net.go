@@ -4,10 +4,8 @@ package word2vec
 import (
 	"errors"
 	"math"
-	"sort"
 
 	"github.com/unixpickle/anydiff"
-	"github.com/unixpickle/anynet"
 	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/anyvec/anyvecsave"
 	"github.com/unixpickle/serializer"
@@ -67,25 +65,33 @@ func NewNet(c anyvec.Creator, in, hidden, out int) *Net {
 }
 
 // Step performs a step of gradient descent for the sparse
-// input and desired output.
+// input and the desired output paths.
 //
 // It returns the cost before the step was taken.
 //
 // For gradient descent, the provided step size should be
 // negative.
-func (n *Net) Step(in, desired map[int]anyvec.Numeric, step anyvec.Numeric) anyvec.Numeric {
+func (n *Net) Step(in map[int]anyvec.Numeric, paths [][]int, step anyvec.Numeric) anyvec.Numeric {
 	if len(in) == 0 {
 		panic("cannot have empty input")
 	}
-	if len(desired) == 0 {
+	if len(paths) == 0 {
 		panic("cannot have empty desired output")
 	}
 
-	hidden, out := n.forward(in, desired)
+	hidden, out := n.forward(in, paths)
 	actualRes := anydiff.NewVar(out)
-	desiredRes := sparseVectorRes(out.Creator(), desired)
+	var cost anydiff.Res
+	for _, path := range paths {
+		pathCost := costForPath(sortedNodesInPaths(paths), path, actualRes)
+		if cost == nil {
+			cost = pathCost
+		} else {
+			cost = anydiff.Add(cost, pathCost)
+		}
+	}
+	cost = anydiff.Scale(cost, out.Creator().MakeNumeric(1/float64(len(paths))))
 
-	cost := anynet.SigmoidCE{}.Cost(desiredRes, actualRes, 1)
 	upstream := out.Creator().MakeVector(1)
 	upstream.AddScaler(out.Creator().MakeNumeric(1))
 	grad := anydiff.NewGrad(actualRes)
@@ -93,7 +99,7 @@ func (n *Net) Step(in, desired map[int]anyvec.Numeric, step anyvec.Numeric) anyv
 
 	outGrad := grad[actualRes]
 
-	n.backward(in, hidden, out, outGrad, sortedKeys(desired), step)
+	n.backward(in, hidden, out, outGrad, sortedNodesInPaths(paths), step)
 
 	return anyvec.Sum(cost.Output())
 }
@@ -115,7 +121,7 @@ func (n *Net) Serialize() ([]byte, error) {
 	)
 }
 
-func (n *Net) forward(in, desired map[int]anyvec.Numeric) (hidden, out anyvec.Vector) {
+func (n *Net) forward(in map[int]anyvec.Numeric, paths [][]int) (hidden, out anyvec.Vector) {
 	temp := n.Encoder.Vector.Creator().MakeVector(n.Hidden)
 	for i, v := range in {
 		temp.SetSlice(-i*n.Hidden, n.Encoder.Vector)
@@ -127,7 +133,7 @@ func (n *Net) forward(in, desired map[int]anyvec.Numeric) (hidden, out anyvec.Ve
 		}
 	}
 	var outNums []anyvec.Vector
-	for _, i := range sortedKeys(desired) {
+	for _, i := range sortedNodesInPaths(paths) {
 		temp.SetSlice(-i*n.Hidden, n.Decoder.Vector)
 		dot := temp.Dot(hidden)
 		num := temp.Creator().MakeVector(1)
@@ -180,23 +186,4 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 		tempOldRow.Add(tempGrad)
 		n.Encoder.Vector.SetSlice(rowStart, tempOldRow)
 	}
-}
-
-func sparseVectorRes(c anyvec.Creator, m map[int]anyvec.Numeric) anydiff.Res {
-	var resValues []anyvec.Vector
-	for _, idx := range sortedKeys(m) {
-		vec := c.MakeVector(1)
-		vec.AddScaler(m[idx])
-		resValues = append(resValues, vec)
-	}
-	return anydiff.NewConst(c.Concat(resValues...))
-}
-
-func sortedKeys(m map[int]anyvec.Numeric) []int {
-	var res []int
-	for x := range m {
-		res = append(res, x)
-	}
-	sort.Ints(res)
-	return res
 }

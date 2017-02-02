@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/unixpickle/anyvec"
 	"github.com/unixpickle/serializer"
 	"github.com/unixpickle/splaytree"
 )
@@ -45,26 +44,12 @@ func BuildHierarchy(words map[string]float64) Hierarchy {
 	return res
 }
 
-// DesiredOuts takes a bag of words and produces a sparse
-// vector of target probabilities for the hierarchical
-// softmax.
-func (h Hierarchy) DesiredOuts(c anyvec.Creator, words []string) map[int]anyvec.Numeric {
-	numVisits := map[int]int{}
-	numRights := map[int]int{}
+// Paths gets the path for each word in a bag and collects
+// the paths in a slice.
+func (h Hierarchy) Paths(words []string) [][]int {
+	var res [][]int
 	for _, w := range words {
-		for _, node := range h[w] {
-			if node < 0 {
-				numVisits[-node-1]++
-			} else {
-				numVisits[node-1]++
-				numRights[node-1]++
-			}
-		}
-	}
-	res := map[int]anyvec.Numeric{}
-	for k, v := range numVisits {
-		rightProb := float64(numRights[k]) / float64(v)
-		res[k] = c.MakeNumeric(rightProb)
+		res = append(res, h[w])
 	}
 	return res
 }

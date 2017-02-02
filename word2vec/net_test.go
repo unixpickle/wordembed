@@ -42,15 +42,14 @@ func TestNetSerialize(t *testing.T) {
 
 type netRes struct {
 	In  map[int]anyvec.Numeric
-	Out map[int]anyvec.Numeric
+	Out [][]int
 	Net *Net
 }
 
 func randomNetRes() *netRes {
 	return &netRes{
-		In: map[int]anyvec.Numeric{1: float32(2), 4: float32(1)},
-		Out: map[int]anyvec.Numeric{0: float32(0.75), 2: float32(1), 3: float32(0),
-			8: float32(1)},
+		In:  map[int]anyvec.Numeric{1: float32(2), 4: float32(1)},
+		Out: [][]int{{1, -2, 3}, {1, -3, 5}, {1, 2, -4}},
 		Net: NewNet(anyvec32.CurrentCreator(), 5, 3, 10),
 	}
 }

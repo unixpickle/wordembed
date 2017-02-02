@@ -52,9 +52,9 @@ func (s *SkipGram) Train(done <-chan struct{}) {
 
 		in := map[int]anyvec.Numeric{w2i[sample.Word]: one}
 		allWords := append(append([]string{}, sample.Left...), sample.Right...)
-		desired := s.Hierarchy.DesiredOuts(creator, allWords)
+		paths := s.Hierarchy.Paths(allWords)
 
-		cost := s.Net.Step(in, desired, s.StepSize)
+		cost := s.Net.Step(in, paths, s.StepSize)
 		if s.StatusFunc != nil {
 			s.StatusFunc(cost)
 		}
