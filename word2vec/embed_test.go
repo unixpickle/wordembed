@@ -48,6 +48,23 @@ func TestEmbedSortSimilar(t *testing.T) {
 	}
 }
 
+func TestEmbedFind(t *testing.T) {
+	vec := anyvec32.MakeVectorData([]float32{
+		1, 1,
+		0, 1,
+		1, 0,
+		0, -1,
+	})
+	e := &Embed{
+		Matrix: anydiff.NewVar(vec),
+		Words:  []string{"a", "b", "c", "d"},
+	}
+	word := e.Find(anyvec32.MakeVectorData([]float32{0.1, 2}))
+	if word != "b" {
+		t.Errorf("expected b but got %v", word)
+	}
+}
+
 func TestEmbedSerialize(t *testing.T) {
 	vec := anyvec32.MakeVector(10)
 	anyvec.Rand(vec, anyvec.Normal, nil)

@@ -81,6 +81,14 @@ func (e *Embed) Embed(word, defaultWord string) anydiff.Res {
 	}
 }
 
+// Find finds the word with the smallest cosine distance
+// to the given vector.
+func (e *Embed) Find(word anyvec.Vector) string {
+	dists := e.cosineDistances(word)
+	maxIdx := anyvec.MaxIndex(dists)
+	return e.Words[maxIdx]
+}
+
 // SortSimilar sorts the words by their cosine distance
 // to a reference word vector.
 // The result is sorted from most to least similar.
