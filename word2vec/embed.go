@@ -18,8 +18,11 @@ func init() {
 
 // Embed produces embeddings for words.
 type Embed struct {
-	Matrix      *anydiff.Var
-	WordToIndex map[string]int
+	Matrix *anydiff.Var
+
+	// Words is sorted, and each word's index corresponds to
+	// a row in the matrix.
+	Words []string
 }
 
 // DeserializeEmbed deserializes an Embed.
@@ -29,11 +32,11 @@ func DeserializeEmbed(d []byte) (*Embed, error) {
 	if err := serializer.DeserializeAny(d, &vec, &wordList); err != nil {
 		return nil, errors.New("deserialize Embed: " + err.Error())
 	}
-	var m map[string]int
-	if err := json.Unmarshal(wordList, &m); err != nil {
+	var words []string
+	if err := json.Unmarshal(wordList, &words); err != nil {
 		return nil, errors.New("deserialize Embed: " + err.Error())
 	}
-	return &Embed{Matrix: anydiff.NewVar(vec.Vector), WordToIndex: m}, nil
+	return &Embed{Matrix: anydiff.NewVar(vec.Vector), Words: words}, nil
 }
 
 // NewEmbed creates an Embed from the vectors in an
@@ -49,31 +52,25 @@ func NewEmbed(mat *anydiff.Var, h Hierarchy) *Embed {
 		words = append(words, w)
 	}
 	sort.Strings(words)
-
-	m := map[string]int{}
-	for i, w := range words {
-		m[w] = i
-	}
-
 	return &Embed{
-		Matrix:      mat,
-		WordToIndex: m,
+		Matrix: mat,
+		Words:  words,
 	}
 }
 
 // Embed produces an embedding for the word.
-// If no embedding was found, the provided default word is
-// used.
+// If the word is not in the embedding's dictionary, the
+// default word is used.
 // If the default word is also not found, nil is returned.
 func (e *Embed) Embed(word, defaultWord string) anydiff.Res {
-	idx, ok := e.WordToIndex[word]
+	idx, ok := e.wordToIndex(word)
 	if !ok {
-		idx, ok = e.WordToIndex[defaultWord]
+		idx, ok = e.wordToIndex(defaultWord)
 		if !ok {
 			return nil
 		}
 	}
-	cols := e.Matrix.Vector.Len() / len(e.WordToIndex)
+	cols := e.Matrix.Vector.Len() / len(e.Words)
 	start := cols * idx
 	vec := e.Matrix.Vector.Creator().MakeVector(cols)
 	vec.SetSlice(-start, e.Matrix.Vector)
@@ -90,7 +87,7 @@ func (e *Embed) Embed(word, defaultWord string) anydiff.Res {
 func (e *Embed) SortSimilar(word anyvec.Vector) []string {
 	dists := e.cosineDistances(word)
 	sorter := &similaritySorter{
-		Words:      make([]string, dists.Len()),
+		Words:      append([]string{}, e.Words...),
 		Similarity: make([]float64, dists.Len()),
 	}
 	switch data := dists.Data().(type) {
@@ -103,11 +100,6 @@ func (e *Embed) SortSimilar(word anyvec.Vector) []string {
 	default:
 		panic("unsupported numeric type")
 	}
-
-	for w, i := range e.WordToIndex {
-		sorter.Words[i] = w
-	}
-
 	sort.Sort(sorter)
 	return sorter.Words
 }
@@ -120,23 +112,34 @@ func (e *Embed) SerializerType() string {
 
 // Serialize serializes the Embed.
 func (e *Embed) Serialize() ([]byte, error) {
-	mapData, _ := json.Marshal(e.WordToIndex)
+	data, _ := json.Marshal(e.Words)
 	return serializer.SerializeAny(
 		&anyvecsave.S{Vector: e.Matrix.Vector},
-		serializer.Bytes(mapData),
+		serializer.Bytes(data),
 	)
+}
+
+func (e *Embed) wordToIndex(w string) (int, bool) {
+	idx := sort.SearchStrings(e.Words, w)
+	if idx == len(e.Words) {
+		return 0, false
+	}
+	if e.Words[idx] != w {
+		return 0, false
+	}
+	return idx, true
 }
 
 func (e *Embed) cosineDistances(vec anyvec.Vector) anyvec.Vector {
 	squares := e.Matrix.Vector.Copy()
 	anyvec.Pow(squares, squares.Creator().MakeNumeric(2))
-	mags := anyvec.SumCols(squares, len(e.WordToIndex))
+	mags := anyvec.SumCols(squares, len(e.Words))
 	anyvec.Pow(mags, mags.Creator().MakeNumeric(0.5))
 
 	m1 := &anyvec.Matrix{
 		Data: e.Matrix.Vector,
-		Rows: len(e.WordToIndex),
-		Cols: e.Matrix.Vector.Len() / len(e.WordToIndex),
+		Rows: len(e.Words),
+		Cols: e.Matrix.Vector.Len() / len(e.Words),
 	}
 	m2 := &anyvec.Matrix{
 		Data: vec,

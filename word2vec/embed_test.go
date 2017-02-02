@@ -15,8 +15,8 @@ func TestEmbedProp(t *testing.T) {
 	vec := anyvec32.MakeVector(10)
 	anyvec.Rand(vec, anyvec.Normal, nil)
 	e := &Embed{
-		Matrix:      anydiff.NewVar(vec),
-		WordToIndex: map[string]int{"a": 0, "b": 1, "c": 2, "d": 3, "e": 4},
+		Matrix: anydiff.NewVar(vec),
+		Words:  []string{"a", "b", "c", "d", "e"},
 	}
 	checker := anydifftest.ResChecker{
 		F: func() anydiff.Res {
@@ -37,8 +37,8 @@ func TestEmbedSortSimilar(t *testing.T) {
 		0, -1,
 	})
 	e := &Embed{
-		Matrix:      anydiff.NewVar(vec),
-		WordToIndex: map[string]int{"a": 0, "b": 1, "c": 2, "d": 3},
+		Matrix: anydiff.NewVar(vec),
+		Words:  []string{"a", "b", "c", "d"},
 	}
 	aVec := e.Embed("d", "").Output()
 	actual := e.SortSimilar(aVec)
@@ -52,8 +52,8 @@ func TestEmbedSerialize(t *testing.T) {
 	vec := anyvec32.MakeVector(10)
 	anyvec.Rand(vec, anyvec.Normal, nil)
 	e := &Embed{
-		Matrix:      anydiff.NewVar(vec),
-		WordToIndex: map[string]int{"a": 0, "b": 1, "c": 2, "d": 3, "e": 4},
+		Matrix: anydiff.NewVar(vec),
+		Words:  []string{"a", "b", "c", "d", "e"},
 	}
 	data, err := serializer.SerializeAny(e)
 	if err != nil {
