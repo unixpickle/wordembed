@@ -84,6 +84,34 @@ func (e *Embed) Embed(word, defaultWord string) anydiff.Res {
 	}
 }
 
+// SortSimilar sorts the words by their cosine distance
+// to a reference word vector.
+// The result is sorted from most to least similar.
+func (e *Embed) SortSimilar(word anyvec.Vector) []string {
+	dists := e.cosineDistances(word)
+	sorter := &similaritySorter{
+		Words:      make([]string, dists.Len()),
+		Similarity: make([]float64, dists.Len()),
+	}
+	switch data := dists.Data().(type) {
+	case []float64:
+		copy(sorter.Similarity, data)
+	case []float32:
+		for i, x := range data {
+			sorter.Similarity[i] = float64(x)
+		}
+	default:
+		panic("unsupported numeric type")
+	}
+
+	for w, i := range e.WordToIndex {
+		sorter.Words[i] = w
+	}
+
+	sort.Sort(sorter)
+	return sorter.Words
+}
+
 // SerializerType returns the unique ID used to serialize
 // an Embed with the serializer package.
 func (e *Embed) SerializerType() string {
@@ -97,6 +125,34 @@ func (e *Embed) Serialize() ([]byte, error) {
 		&anyvecsave.S{Vector: e.Matrix.Vector},
 		serializer.Bytes(mapData),
 	)
+}
+
+func (e *Embed) cosineDistances(vec anyvec.Vector) anyvec.Vector {
+	squares := e.Matrix.Vector.Copy()
+	anyvec.Pow(squares, squares.Creator().MakeNumeric(2))
+	mags := anyvec.SumCols(squares, len(e.WordToIndex))
+	anyvec.Pow(mags, mags.Creator().MakeNumeric(0.5))
+
+	m1 := &anyvec.Matrix{
+		Data: e.Matrix.Vector,
+		Rows: len(e.WordToIndex),
+		Cols: e.Matrix.Vector.Len() / len(e.WordToIndex),
+	}
+	m2 := &anyvec.Matrix{
+		Data: vec,
+		Rows: vec.Len(),
+		Cols: 1,
+	}
+	product := &anyvec.Matrix{
+		Data: mags.Creator().MakeVector(mags.Len()),
+		Rows: mags.Len(),
+		Cols: 1,
+	}
+	product.Product(false, false, mags.Creator().MakeNumeric(1), m1, m2,
+		mags.Creator().MakeNumeric(0))
+	product.Data.Div(mags)
+
+	return product.Data
 }
 
 type embedRes struct {
@@ -122,4 +178,22 @@ func (e *embedRes) Propagate(u anyvec.Vector, g anydiff.Grad) {
 		tempSlice.Add(u)
 		v.SetSlice(e.Index, tempSlice)
 	}
+}
+
+type similaritySorter struct {
+	Words      []string
+	Similarity []float64
+}
+
+func (s *similaritySorter) Len() int {
+	return len(s.Words)
+}
+
+func (s *similaritySorter) Swap(i, j int) {
+	s.Words[i], s.Words[j] = s.Words[j], s.Words[i]
+	s.Similarity[i], s.Similarity[j] = s.Similarity[j], s.Similarity[i]
+}
+
+func (s *similaritySorter) Less(i, j int) bool {
+	return s.Similarity[i] > s.Similarity[j]
 }

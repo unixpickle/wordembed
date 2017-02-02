@@ -29,6 +29,25 @@ func TestEmbedProp(t *testing.T) {
 	checker.FullCheck(t)
 }
 
+func TestEmbedSortSimilar(t *testing.T) {
+	vec := anyvec32.MakeVectorData([]float32{
+		1, 1,
+		0, 1,
+		1, 0,
+		0, -1,
+	})
+	e := &Embed{
+		Matrix:      anydiff.NewVar(vec),
+		WordToIndex: map[string]int{"a": 0, "b": 1, "c": 2, "d": 3},
+	}
+	aVec := e.Embed("d", "").Output()
+	actual := e.SortSimilar(aVec)
+	expected := []string{"d", "c", "a", "b"}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("expected %v got %v", expected, actual)
+	}
+}
+
 func TestEmbedSerialize(t *testing.T) {
 	vec := anyvec32.MakeVector(10)
 	anyvec.Rand(vec, anyvec.Normal, nil)
