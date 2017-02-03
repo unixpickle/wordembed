@@ -38,7 +38,7 @@ func costForPath(all, path []int, actual anydiff.Res) anydiff.Res {
 	}
 	c := actual.Output().Creator()
 	desiredRes := anydiff.NewConst(c.MakeVectorData(c.MakeNumericList(desired)))
-	maskRes := anydiff.NewConst(c.MakeVectorData(c.MakeNumericList(desired)))
+	maskRes := anydiff.NewConst(c.MakeVectorData(c.MakeNumericList(mask)))
 	cost := anynet.SigmoidCE{}.Cost(desiredRes, actual, len(all))
 	return anydiff.Sum(anydiff.Mul(cost, maskRes))
 }
