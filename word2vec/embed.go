@@ -72,11 +72,9 @@ func (e *Embed) Embed(word, defaultWord string) anydiff.Res {
 	}
 	cols := e.Matrix.Vector.Len() / len(e.Words)
 	start := cols * idx
-	vec := e.Matrix.Vector.Creator().MakeVector(cols)
-	vec.SetSlice(-start, e.Matrix.Vector)
 	return &embedRes{
 		Mat:    e.Matrix,
-		OutVec: vec,
+		OutVec: e.Matrix.Vector.Slice(start, start+cols),
 		Index:  start,
 	}
 }
@@ -184,10 +182,7 @@ func (e *embedRes) Vars() anydiff.VarSet {
 
 func (e *embedRes) Propagate(u anyvec.Vector, g anydiff.Grad) {
 	if v, ok := g[e.Mat]; ok {
-		tempSlice := u.Creator().MakeVector(u.Len())
-		tempSlice.SetSlice(-e.Index, v)
-		tempSlice.Add(u)
-		v.SetSlice(e.Index, tempSlice)
+		v.Slice(e.Index, e.Index+u.Len()).Add(u)
 	}
 }
 

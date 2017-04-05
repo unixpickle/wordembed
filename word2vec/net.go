@@ -124,7 +124,7 @@ func (n *Net) Serialize() ([]byte, error) {
 func (n *Net) forward(in map[int]anyvec.Numeric, paths [][]int) (hidden, out anyvec.Vector) {
 	temp := n.Encoder.Vector.Creator().MakeVector(n.Hidden)
 	for i, v := range in {
-		temp.SetSlice(-i*n.Hidden, n.Encoder.Vector)
+		temp.Set(n.Encoder.Vector.Slice(i*n.Hidden, (i+1)*n.Hidden))
 		temp.Scale(v)
 		if hidden == nil {
 			hidden = temp.Copy()
@@ -134,7 +134,7 @@ func (n *Net) forward(in map[int]anyvec.Numeric, paths [][]int) (hidden, out any
 	}
 	var outNums []anyvec.Vector
 	for _, i := range sortedNodesInPaths(paths) {
-		temp.SetSlice(-i*n.Hidden, n.Decoder.Vector)
+		temp.Set(n.Decoder.Vector.Slice(i*n.Hidden, (i+1)*n.Hidden))
 		dot := temp.Dot(hidden)
 		num := temp.Creator().MakeVector(1)
 		num.AddScaler(dot)
@@ -149,19 +149,18 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 	var hiddenGrad anyvec.Vector
 
 	tempGrad := out.Creator().MakeVector(n.Hidden)
-	tempOldRow := out.Creator().MakeVector(n.Hidden)
 
 	// Propagate through the decoder weights.
 	for i, outIndex := range outIndices {
 		rowStart := outIndex * n.Hidden
-		tempOldRow.SetSlice(-rowStart, n.Decoder.Vector)
+		oldRow := n.Decoder.Vector.Slice(rowStart, rowStart+n.Hidden)
 		upstreamScaler := anyvec.Sum(outGrad.Slice(i, i+1))
 
 		if hiddenGrad == nil {
-			hiddenGrad = tempOldRow.Copy()
+			hiddenGrad = oldRow.Copy()
 			hiddenGrad.Scale(upstreamScaler)
 		} else {
-			tempGrad.Set(tempOldRow)
+			tempGrad.Set(oldRow)
 			tempGrad.Scale(upstreamScaler)
 			hiddenGrad.Add(tempGrad)
 		}
@@ -170,20 +169,18 @@ func (n *Net) backward(in map[int]anyvec.Numeric, hidden, out, outGrad anyvec.Ve
 		tempGrad.Scale(upstreamScaler)
 		tempGrad.Scale(stepSize)
 
-		tempOldRow.Add(tempGrad)
-		n.Decoder.Vector.SetSlice(rowStart, tempOldRow)
+		oldRow.Add(tempGrad)
 	}
 
 	// Propagate through the hidden layer.
 	for inIndex, scaler := range in {
 		rowStart := inIndex * n.Hidden
-		tempOldRow.SetSlice(-rowStart, n.Encoder.Vector)
+		oldRow := n.Encoder.Vector.Slice(rowStart, rowStart+n.Hidden)
 
 		tempGrad.Set(hiddenGrad)
 		tempGrad.Scale(scaler)
 		tempGrad.Scale(stepSize)
 
-		tempOldRow.Add(tempGrad)
-		n.Encoder.Vector.SetSlice(rowStart, tempOldRow)
+		oldRow.Add(tempGrad)
 	}
 }
