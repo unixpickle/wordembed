@@ -93,7 +93,7 @@ func (n *Net) Step(in map[int]anyvec.Numeric, paths [][]int, step anyvec.Numeric
 	cost = anydiff.Scale(cost, out.Creator().MakeNumeric(1/float64(len(paths))))
 
 	upstream := out.Creator().MakeVector(1)
-	upstream.AddScaler(out.Creator().MakeNumeric(1))
+	upstream.AddScalar(out.Creator().MakeNumeric(1))
 	grad := anydiff.NewGrad(actualRes)
 	cost.Propagate(upstream, grad)
 
@@ -137,7 +137,7 @@ func (n *Net) forward(in map[int]anyvec.Numeric, paths [][]int) (hidden, out any
 		temp.Set(n.Decoder.Vector.Slice(i*n.Hidden, (i+1)*n.Hidden))
 		dot := temp.Dot(hidden)
 		num := temp.Creator().MakeVector(1)
-		num.AddScaler(dot)
+		num.AddScalar(dot)
 		outNums = append(outNums, num)
 	}
 	out = hidden.Creator().Concat(outNums...)
