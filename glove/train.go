@@ -275,7 +275,7 @@ func (t *Trainer) applyUpdate(r *trainerResult) {
 	for i, grad := range gradVecs {
 		ada := adaVecs[i]
 		sqGrad := grad.Copy()
-		sqGrad.Mul(sqGrad)
+		sqGrad.Mul(grad)
 		ada.Add(sqGrad)
 
 		adaScale := ada.Copy()
