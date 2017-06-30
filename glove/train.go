@@ -9,6 +9,7 @@ import (
 	"github.com/unixpickle/anyvec/anyvecsave"
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/wordembed"
 )
 
 func init() {
@@ -206,6 +207,29 @@ func (t *Trainer) Update(n int) anyvec.Numeric {
 
 	totalCost.Scale(totalCost.Creator().MakeNumeric(1 / float64(n)))
 	return anyvec.Sum(totalCost)
+}
+
+// Embedding creates an embedding from the parameters.
+//
+// If avg is true, then the word vectors and context
+// vectors are averaged to create the embedding.
+//
+// The parameters are copied, so t may be modified after
+// the embeddings are created.
+func (t *Trainer) Embedding(tokens wordembed.TokenSet, avg bool) *Embedding {
+	data := t.Vectors.Data.Copy()
+	if avg {
+		data.Add(t.CtxVectors.Data)
+		data.Scale(data.Creator().MakeNumeric(1.0 / 2))
+	}
+	return &Embedding{
+		Tokens: tokens,
+		Vectors: &anyvec.Matrix{
+			Data: data,
+			Rows: t.Vectors.Rows,
+			Cols: t.Vectors.Cols,
+		},
+	}
 }
 
 // SerializerType returns the unique ID used to serialize

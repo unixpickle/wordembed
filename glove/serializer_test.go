@@ -6,6 +6,7 @@ import (
 
 	"github.com/unixpickle/anyvec/anyvec32"
 	"github.com/unixpickle/serializer"
+	"github.com/unixpickle/wordembed"
 )
 
 func TestMatrixSerialize(t *testing.T) {
@@ -22,6 +23,14 @@ func TestTrainerSerialize(t *testing.T) {
 	trainer.Rate = 0.9
 	trainer.NumUpdates = 666
 	testSerialize(t, trainer)
+}
+
+func TestEmbeddingSerialize(t *testing.T) {
+	c := anyvec32.DefaultCreator{}
+	trainer := NewTrainer(c, 15, exampleCooccurrenceMatrix())
+	toks := wordembed.TokenSet([]string{"a", "b", "c", "d"})
+	embed := trainer.Embedding(toks, true)
+	testSerialize(t, embed)
 }
 
 func testSerialize(t *testing.T, obj interface{}) {
