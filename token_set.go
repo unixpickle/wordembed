@@ -21,6 +21,15 @@ func (t TokenSet) ID(token string) int {
 	return idx
 }
 
+// IDs computes the ID for each token.
+func (t TokenSet) IDs(tokens []string) []int {
+	res := make([]int, len(tokens))
+	for i, tok := range tokens {
+		res[i] = t.ID(tok)
+	}
+	return res
+}
+
 // Token gets the token for the given ID.
 //
 // If the token ID corresponds to an absent token, then ""
