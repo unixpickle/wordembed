@@ -15,13 +15,6 @@ func (t TokenCounts) Add(token string) {
 	t[token]++
 }
 
-// AddAll adds each token from the stream.
-func (t TokenCounts) AddAll(stream <-chan string) {
-	for tok := range stream {
-		t.Add(tok)
-	}
-}
-
 // MostCommon produces the n tokens with the most
 // occurrences.
 // If there are less than n total tokens, then all tokens
