@@ -1,6 +1,16 @@
 package wordembed
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+
+	"github.com/unixpickle/essentials"
+	"github.com/unixpickle/serializer"
+)
+
+func init() {
+	serializer.RegisterTypedDeserializer(TokenSet{}.SerializerType(), DeserializeTokenSet)
+}
 
 // A TokenSet is a set of tokens which can translate
 // between token IDs and tokens.
@@ -11,6 +21,15 @@ import "sort"
 // The token identified as len(TokenSet) is used as a
 // placeholder for tokens not in the set.
 type TokenSet []string
+
+// DeserializeTokenSet deserializes a TokenSet.
+func DeserializeTokenSet(d []byte) (TokenSet, error) {
+	var res TokenSet
+	if err := json.Unmarshal(d, &res); err != nil {
+		return nil, essentials.AddCtx("deserialize TokenSet", err)
+	}
+	return res, nil
+}
 
 // ID gets an ID for the token.
 func (t TokenSet) ID(token string) int {
@@ -39,4 +58,15 @@ func (t TokenSet) Token(id int) string {
 		return ""
 	}
 	return t[id]
+}
+
+// SerializerType returns the unique ID used to serialize
+// a TokenSet with the serializer package.
+func (t TokenSet) SerializerType() string {
+	return "github.com/unixpickle/wordembed.TokenSet"
+}
+
+// Serialize serializes the TokenSet.
+func (t TokenSet) Serialize() ([]byte, error) {
+	return json.Marshal(t)
 }
