@@ -12,7 +12,7 @@ func (t TokenCounts) Add(token string) {
 }
 
 // AddAll adds each token from the stream.
-func (t TokenCounts) CountTokens(stream <-chan string) {
+func (t TokenCounts) AddAll(stream <-chan string) {
 	for tok := range stream {
 		t.Add(tok)
 	}
