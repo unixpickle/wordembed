@@ -1,6 +1,11 @@
 package glove
 
-import "github.com/unixpickle/wordembed"
+import (
+	"runtime"
+	"sync"
+
+	"github.com/unixpickle/wordembed"
+)
 
 // A CooccurCounter tallies the co-occurrences of tokens
 // in a stream of tokenized documents.
@@ -38,16 +43,52 @@ type CooccurCounter struct {
 // Add adds all the co-occurrences from the tokenized
 // document.
 func (c *CooccurCounter) Add(document []string) {
-	ids := c.Tokens.IDs(document)
-	for i := range document {
+	c.addWithIDs(nil, c.Tokens.IDs(document))
+}
+
+// AddAll adds the co-occurrences from each document.
+//
+// Unlike Add, AddAll can utilize more than one thread.
+func (c *CooccurCounter) AddAll(documents <-chan []string) {
+	rowLocks := make([]*sync.Mutex, len(c.Matrix.Rows))
+	for i := range rowLocks {
+		rowLocks[i] = &sync.Mutex{}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for input := range documents {
+				ids := c.Tokens.IDs(input)
+				c.addWithIDs(rowLocks, ids)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func (c *CooccurCounter) addWithIDs(rowLocks []*sync.Mutex, ids []int) {
+	for i := range ids {
 		for j := i - 1; j >= 0 && (j >= i-c.Window || c.Window == 0); j-- {
 			weight := float32(1)
 			if c.WeightWords {
 				weight = 1 / float32(i-j)
 			}
 			id1, id2 := ids[i], ids[j]
-			c.Matrix.Add(id1, id2, weight)
-			c.Matrix.Add(id2, id1, weight)
+
+			if rowLocks != nil {
+				rowLocks[id1].Lock()
+				c.Matrix.Add(id1, id2, weight)
+				rowLocks[id1].Unlock()
+				rowLocks[id2].Lock()
+				c.Matrix.Add(id2, id1, weight)
+				rowLocks[id2].Unlock()
+			} else {
+				c.Matrix.Add(id1, id2, weight)
+				c.Matrix.Add(id2, id1, weight)
+			}
 		}
 	}
 }

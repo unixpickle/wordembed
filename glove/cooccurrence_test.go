@@ -31,8 +31,13 @@ func BenchmarkAddCooccurrences(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		for _, doc := range documents {
-			counter.Add(doc)
-		}
+		ch := make(chan []string, 16)
+		go func() {
+			for _, doc := range documents {
+				ch <- doc
+			}
+			close(ch)
+		}()
+		counter.AddAll(ch)
 	}
 }
