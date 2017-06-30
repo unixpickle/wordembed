@@ -134,7 +134,8 @@ func NewTrainer(c anyvec.Creator, vecSize int, cooccur *SparseMatrix) *Trainer {
 }
 
 // Update applies n updates to the model in parallel.
-func (t *Trainer) Update(n int) {
+// It returns the average cost for the mini-batch.
+func (t *Trainer) Update(n int) anyvec.Numeric {
 	var wg sync.WaitGroup
 	results := make(chan *trainerResult, n)
 
@@ -155,21 +156,24 @@ func (t *Trainer) Update(n int) {
 
 			creator := wordVec.Vector.Creator()
 
-			cost := anydiff.Square(
-				anydiff.Add(
+			cost := anydiff.Scale(
+				anydiff.Square(
 					anydiff.Add(
-						anydiff.Dot(wordVec, ctxVec),
-						wordBias,
-					),
-					anydiff.AddScalar(
-						ctxBias,
-						creator.MakeNumeric(-math.Log(float64(cooccur))),
+						anydiff.Add(
+							anydiff.Dot(wordVec, ctxVec),
+							wordBias,
+						),
+						anydiff.AddScalar(
+							ctxBias,
+							creator.MakeNumeric(-math.Log(float64(cooccur))),
+						),
 					),
 				),
+				creator.MakeNumeric(weighting),
 			)
 
 			gradScale := creator.MakeVectorData(
-				creator.MakeNumericList([]float64{weighting * t.Rate}),
+				creator.MakeNumericList([]float64{t.Rate}),
 			)
 			grad := anydiff.NewGrad(cost.Vars().Slice()...)
 			cost.Propagate(gradScale, grad)
@@ -177,20 +181,31 @@ func (t *Trainer) Update(n int) {
 			results <- &trainerResult{
 				WordID:      wordID,
 				CtxID:       ctxID,
-				Grad:        grad[wordVec],
-				CtxGrad:     grad[ctxVec],
-				BiasGrad:    grad[wordBias],
-				CtxBiasGrad: grad[ctxBias],
+				Cost:        cost.Output().Copy(),
+				Grad:        grad[wordVec].Copy(),
+				CtxGrad:     grad[ctxVec].Copy(),
+				BiasGrad:    grad[wordBias].Copy(),
+				CtxBiasGrad: grad[ctxBias].Copy(),
 			}
 		}()
 	}
 
 	wg.Wait()
 	close(results)
+
+	var totalCost anyvec.Vector
 	for result := range results {
 		t.applyUpdate(result)
+		if totalCost == nil {
+			totalCost = result.Cost
+		} else {
+			totalCost.Add(result.Cost)
+		}
 	}
 	t.NumUpdates += n
+
+	totalCost.Scale(totalCost.Creator().MakeNumeric(1 / float64(n)))
+	return anyvec.Sum(totalCost)
 }
 
 // SerializerType returns the unique ID used to serialize
@@ -251,6 +266,8 @@ func (t *Trainer) applyUpdate(r *trainerResult) {
 type trainerResult struct {
 	WordID int
 	CtxID  int
+
+	Cost anyvec.Vector
 
 	Grad        anyvec.Vector
 	CtxGrad     anyvec.Vector
