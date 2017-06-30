@@ -173,11 +173,11 @@ func (t *Trainer) Update(n int) anyvec.Numeric {
 				creator.MakeNumeric(weighting),
 			)
 
-			gradScale := creator.MakeVectorData(
-				creator.MakeNumericList([]float64{t.Rate}),
+			one := creator.MakeVectorData(
+				creator.MakeNumericList([]float64{1}),
 			)
 			grad := anydiff.NewGrad(cost.Vars().Slice()...)
-			cost.Propagate(gradScale, grad)
+			cost.Propagate(one, grad)
 
 			results <- &trainerResult{
 				WordID:      wordID,
@@ -281,9 +281,10 @@ func (t *Trainer) applyUpdate(r *trainerResult) {
 		adaScale := ada.Copy()
 		anyvec.Pow(adaScale, ada.Creator().MakeNumeric(-1.0/2))
 		grad.Mul(adaScale)
+		grad.Scale(grad.Creator().MakeNumeric(-t.Rate))
 
 		target := targetVecs[i]
-		target.Sub(grad)
+		target.Add(grad)
 	}
 }
 
