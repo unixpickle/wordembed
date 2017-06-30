@@ -6,13 +6,16 @@ import "github.com/unixpickle/essentials"
 // tokens occurr in some corpus.
 type TokenCounts map[string]int
 
-// CountTokens counts the tokens from a stream.
-func CountTokens(stream <-chan string) TokenCounts {
-	counts := TokenCounts{}
+// Add adds another occurrence of the token.
+func (t TokenCounts) Add(token string) {
+	t[token]++
+}
+
+// AddAll adds each token from the stream.
+func (t TokenCounts) CountTokens(stream <-chan string) {
 	for tok := range stream {
-		counts[tok]++
+		t.Add(tok)
 	}
-	return counts
 }
 
 // MostCommon produces the n tokens with the most
