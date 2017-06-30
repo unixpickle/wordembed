@@ -35,7 +35,7 @@ func DeserializeTokenSet(d []byte) (TokenSet, error) {
 // extra "not found" token.
 // In other words, it returns len(t)+1.
 func (t TokenSet) NumIDs() int {
-	return len(t)
+	return len(t) + 1
 }
 
 // ID gets an ID for the token.
