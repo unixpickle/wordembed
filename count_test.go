@@ -2,7 +2,6 @@ package wordembed
 
 import (
 	"reflect"
-	"sort"
 	"testing"
 )
 
@@ -12,8 +11,7 @@ func TestMostCommon(t *testing.T) {
 		counts.Add(tok)
 	}
 	common := counts.MostCommon(2)
-	sort.Strings(common)
-	if !reflect.DeepEqual(common, []string{"a", "c"}) {
+	if !reflect.DeepEqual(common, TokenSet([]string{"a", "c"})) {
 		t.Error("expected [a c] but got", common)
 	}
 }

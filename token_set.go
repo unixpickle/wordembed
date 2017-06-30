@@ -1,0 +1,33 @@
+package wordembed
+
+import "sort"
+
+// A TokenSet is a set of tokens which can translate
+// between token IDs and tokens.
+//
+// A TokenSet is represented as a sorted list of tokens.
+// Each token's index corresponds to that token's ID.
+//
+// The token identified as len(TokenSet) is used as a
+// placeholder for tokens not in the set.
+type TokenSet []string
+
+// ID gets an ID for the token.
+func (t TokenSet) ID(token string) int {
+	idx := sort.SearchStrings(t, token)
+	if idx < len(t) && t[idx] != token {
+		return len(t)
+	}
+	return idx
+}
+
+// Token gets the token for the given ID.
+//
+// If the token ID corresponds to an absent token, then ""
+// is returned.
+func (t TokenSet) Token(id int) string {
+	if id >= len(t) {
+		return ""
+	}
+	return t[id]
+}

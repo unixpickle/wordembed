@@ -1,6 +1,10 @@
 package wordembed
 
-import "github.com/unixpickle/essentials"
+import (
+	"sort"
+
+	"github.com/unixpickle/essentials"
+)
 
 // TokenCounts keeps track of how many times different
 // tokens occurr in some corpus.
@@ -22,7 +26,7 @@ func (t TokenCounts) AddAll(stream <-chan string) {
 // occurrences.
 // If there are less than n total tokens, then all tokens
 // are returned.
-func (t TokenCounts) MostCommon(n int) []string {
+func (t TokenCounts) MostCommon(n int) TokenSet {
 	var counts []int
 	var tokens []string
 	for tok, num := range t {
@@ -31,11 +35,17 @@ func (t TokenCounts) MostCommon(n int) []string {
 	}
 
 	if len(tokens) <= n {
+		sort.Strings(tokens)
 		return tokens
 	}
 
 	essentials.VoodooSort(counts, func(i, j int) bool {
 		return counts[i] > counts[j]
 	}, tokens)
-	return tokens[:n]
+
+	// Don't waste lots of memory.
+	tokens = append([]string{}, tokens[:n]...)
+
+	sort.Strings(tokens)
+	return tokens
 }
