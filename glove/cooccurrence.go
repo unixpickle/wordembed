@@ -46,8 +46,8 @@ func (c *CooccurCounter) Add(document []string) {
 				weight = 1 / float32(i-j)
 			}
 			id1, id2 := ids[i], ids[j]
-			c.Matrix.Set(id1, id2, c.Matrix.Get(id1, id2)+weight)
-			c.Matrix.Set(id2, id1, c.Matrix.Get(id2, id1)+weight)
+			c.Matrix.Add(id1, id2, weight)
+			c.Matrix.Add(id2, id1, weight)
 		}
 	}
 }

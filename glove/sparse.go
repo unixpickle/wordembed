@@ -59,6 +59,13 @@ func (s *SparseMatrix) Set(row, col int, val float32) {
 	s.Rows[row].Set(col, val)
 }
 
+// Add adds a value to the entry.
+//
+// This is faster than using a Get followed by a Set.
+func (s *SparseMatrix) Add(row, col int, val float32) {
+	s.Rows[row].Add(col, val)
+}
+
 // NumEntries returns the number of entries that have been
 // set with Set.
 func (s *SparseMatrix) NumEntries() int {
@@ -157,6 +164,24 @@ func (s *SparseVector) Set(i int, val float32) {
 		s.Values[idx] = val
 	} else {
 		s.Values[idx] = val
+	}
+}
+
+// Add adds to the entry at the index.
+func (s *SparseVector) Add(i int, val float32) {
+	idx := sort.SearchInts(s.Indices, i)
+	if idx == len(s.Indices) {
+		s.Indices = append(s.Indices, i)
+		s.Values = append(s.Values, val)
+	} else if s.Indices[idx] != i {
+		s.Indices = append(s.Indices, 0)
+		s.Values = append(s.Values, 0)
+		copy(s.Indices[idx+1:], s.Indices[idx:])
+		copy(s.Values[idx+1:], s.Values[idx:])
+		s.Indices[idx] = i
+		s.Values[idx] = val
+	} else {
+		s.Values[idx] += val
 	}
 }
 
