@@ -31,6 +31,13 @@ func DeserializeTokenSet(d []byte) (TokenSet, error) {
 	return res, nil
 }
 
+// NumIDs returns the number of tokens, including the
+// extra "not found" token.
+// In other words, it returns len(t)+1.
+func (t TokenSet) NumIDs() int {
+	return len(t)
+}
+
 // ID gets an ID for the token.
 func (t TokenSet) ID(token string) int {
 	idx := sort.SearchStrings(t, token)

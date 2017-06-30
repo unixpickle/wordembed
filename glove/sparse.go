@@ -2,11 +2,19 @@ package glove
 
 import (
 	"fmt"
+	"math/rand"
 	"sort"
 
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/serializer"
 )
+
+func init() {
+	serializer.RegisterTypedDeserializer((&SparseMatrix{}).SerializerType(),
+		DeserializeSparseMatrix)
+	serializer.RegisterTypedDeserializer((&SparseVector{}).SerializerType(),
+		DeserializeSparseVector)
+}
 
 // A SparseMatrix is a sparse matrix for storing word
 // co-occurrences.
@@ -51,6 +59,36 @@ func (s *SparseMatrix) Set(row, col int, val float32) {
 	s.Rows[row].Set(col, val)
 }
 
+// NumEntries returns the number of entries that have been
+// set with Set.
+func (s *SparseMatrix) NumEntries() int {
+	var numEntries int
+	for _, row := range s.Rows {
+		numEntries += len(row.Indices)
+	}
+	return numEntries
+}
+
+// RandomEntry returns a random position inside the matrix
+// which has been written by Set.
+// If no entries exist, (0, 0) is returned.
+func (s *SparseMatrix) RandomEntry() (row, col int) {
+	numEntries := s.NumEntries()
+	if numEntries == 0 {
+		return
+	}
+
+	idx := rand.Intn(numEntries)
+	for i, row := range s.Rows {
+		if idx < len(row.Indices) {
+			return i, row.Indices[idx]
+		}
+		idx -= len(row.Indices)
+	}
+
+	panic("unreachable")
+}
+
 // SerializerType returns the unique ID used to serialize
 // a SparseMatrix with the serializer package.
 func (s *SparseMatrix) SerializerType() string {
@@ -86,6 +124,11 @@ func DeserializeSparseVector(d []byte) (*SparseVector, error) {
 	err := serializer.DeserializeAny(d, &res.Len, &res.Indices, &res.Values)
 	if err != nil {
 		return nil, essentials.AddCtx("deserialize SparseVector", err)
+	}
+	if len(res.Indices) == 0 {
+		// Save memory and make deep equality hold.
+		res.Indices = nil
+		res.Values = nil
 	}
 	return &res, nil
 }
