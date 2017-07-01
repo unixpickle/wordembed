@@ -50,10 +50,11 @@ func (e *Embedding) EmbedID(id int) anyvec.Vector {
 
 // Lookup finds the n closest token IDs to the given
 // vector, using the Euclidean distance.
+// For each ID, it also returns the Euclidean distance.
 //
 // If n is greater than the number of IDs, then there will
 // be fewer than n results.
-func (e *Embedding) Lookup(vec anyvec.Vector, n int) []int {
+func (e *Embedding) Lookup(vec anyvec.Vector, n int) ([]int, []anyvec.Numeric) {
 	if vec.Len() != e.Vectors.Cols {
 		panic("incorrect vector length")
 	}
@@ -67,16 +68,21 @@ func (e *Embedding) Lookup(vec anyvec.Vector, n int) []int {
 	maxVal := anyvec.AbsMax(distances)
 	distances.Scale(c.MakeNumeric(-1))
 
-	var res []int
+	var ids []int
+	var dists []anyvec.Numeric
 	for i := 0; i < n && i < distances.Len(); i++ {
 		idx := anyvec.MaxIndex(distances)
-		res = append(res, idx)
+		ids = append(ids, idx)
+
+		dist := anyvec.AbsMax(distances.Slice(idx, idx+1))
+		dist = c.NumOps().Pow(dist, c.MakeNumeric(0.5))
+		dists = append(dists, dist)
 
 		// Make sure we don't get this ID again.
 		smallVal := c.NumOps().Mul(maxVal, c.MakeNumeric(-2))
 		distances.Slice(idx, idx+1).AddScalar(smallVal)
 	}
-	return res
+	return ids, dists
 }
 
 // SerializerType returns the unique ID used to serialize
