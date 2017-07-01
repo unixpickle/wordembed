@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"sync/atomic"
 
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/serializer"
@@ -18,31 +19,44 @@ func init() {
 
 // A SparseMatrix is a sparse matrix for storing word
 // co-occurrences.
+//
+// Concurrent reads/writes to/from separate rows in the
+// matrix are safe.
 type SparseMatrix struct {
 	Rows []*SparseVector
+
+	numEntries *atomicNumber
 }
 
 // DeserializeSparseMatrix deserializes a SparseMatrix.
 func DeserializeSparseMatrix(d []byte) (mat *SparseMatrix, err error) {
 	defer essentials.AddCtxTo("deserialize SparseMatrix", &err)
+
 	rows, err := serializer.DeserializeSlice(d)
 	if err != nil {
 		return nil, err
 	}
+
 	var res SparseMatrix
+	res.numEntries = &atomicNumber{}
 	for _, row := range rows {
 		if obj, ok := row.(*SparseVector); ok {
+			res.numEntries.Number += uint64(len(obj.Indices))
 			res.Rows = append(res.Rows, obj)
 		} else {
 			return nil, fmt.Errorf("unexpected type: %T", row)
 		}
 	}
+
 	return &res, nil
 }
 
 // NewSparseMatrix creates a zero matrix.
 func NewSparseMatrix(rows, cols int) *SparseMatrix {
-	res := &SparseMatrix{Rows: make([]*SparseVector, rows)}
+	res := &SparseMatrix{
+		Rows:       make([]*SparseVector, rows),
+		numEntries: &atomicNumber{},
+	}
 	for i := range res.Rows {
 		res.Rows[i] = &SparseVector{Len: cols}
 	}
@@ -56,24 +70,24 @@ func (s *SparseMatrix) Get(row, col int) float32 {
 
 // Set sets an entry in the matrix.
 func (s *SparseMatrix) Set(row, col int, val float32) {
-	s.Rows[row].Set(col, val)
+	if s.Rows[row].Set(col, val) {
+		s.numEntries.Add()
+	}
 }
 
 // Add adds a value to the entry.
 //
 // This is faster than using a Get followed by a Set.
 func (s *SparseMatrix) Add(row, col int, val float32) {
-	s.Rows[row].Add(col, val)
+	if s.Rows[row].Add(col, val) {
+		s.numEntries.Add()
+	}
 }
 
 // NumEntries returns the number of entries that have been
 // set with Set.
 func (s *SparseMatrix) NumEntries() int {
-	var numEntries int
-	for _, row := range s.Rows {
-		numEntries += len(row.Indices)
-	}
-	return numEntries
+	return s.numEntries.Get()
 }
 
 // RandomEntry returns a random position inside the matrix
@@ -150,7 +164,9 @@ func (s *SparseVector) Get(i int) float32 {
 }
 
 // Set sets the entry at the index.
-func (s *SparseVector) Set(i int, val float32) {
+//
+// If a new entry was allocated, true is returned.
+func (s *SparseVector) Set(i int, val float32) bool {
 	idx := s.searchIndices(i)
 	if idx == len(s.Indices) {
 		s.Indices = append(s.Indices, int32(i))
@@ -164,11 +180,15 @@ func (s *SparseVector) Set(i int, val float32) {
 		s.Values[idx] = val
 	} else {
 		s.Values[idx] = val
+		return false
 	}
+	return true
 }
 
 // Add adds to the entry at the index.
-func (s *SparseVector) Add(i int, val float32) {
+//
+// If a new entry was allocated, true is returned.
+func (s *SparseVector) Add(i int, val float32) bool {
 	idx := s.searchIndices(i)
 	if idx == len(s.Indices) {
 		s.Indices = append(s.Indices, int32(i))
@@ -182,7 +202,9 @@ func (s *SparseVector) Add(i int, val float32) {
 		s.Values[idx] = val
 	} else {
 		s.Values[idx] += val
+		return false
 	}
+	return true
 }
 
 // SerializerType returns the unique ID used to serialize
@@ -200,4 +222,16 @@ func (s *SparseVector) searchIndices(index int) int {
 	return sort.Search(len(s.Indices), func(arg2 int) bool {
 		return int(s.Indices[arg2]) >= index
 	})
+}
+
+type atomicNumber struct {
+	Number uint64
+}
+
+func (a *atomicNumber) Get() int {
+	return int(atomic.LoadUint64(&a.Number))
+}
+
+func (a *atomicNumber) Add() {
+	atomic.AddUint64(&a.Number, 1)
 }

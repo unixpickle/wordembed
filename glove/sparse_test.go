@@ -1,6 +1,7 @@
 package glove
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 )
@@ -8,6 +9,8 @@ import (
 func TestSparseMatrix(t *testing.T) {
 	dense := make([]float32, 3*4)
 	sparse := NewSparseMatrix(3, 4)
+
+	entriesUsed := map[string]bool{}
 
 	for i := 0; i < 100; i++ {
 		row := rand.Intn(3)
@@ -21,6 +24,11 @@ func TestSparseMatrix(t *testing.T) {
 			sparse.Set(row, col, val)
 			dense[row*4+col] = val
 		}
+		entriesUsed[fmt.Sprintf("%d,%d", row, col)] = true
+		if len(entriesUsed) != sparse.NumEntries() {
+			t.Errorf("entry count should be %d but got %d", len(entriesUsed),
+				sparse.NumEntries())
+		}
 		for row := 0; row < 3; row++ {
 			for col := 0; col < 4; col++ {
 				actual := sparse.Get(row, col)
@@ -30,5 +38,17 @@ func TestSparseMatrix(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func BenchmarkMatrixRandomEntry(b *testing.B) {
+	matrix := NewSparseMatrix(100000, 100000)
+	for i := 0; i < 100000; i++ {
+		matrix.Set(rand.Intn(100000), rand.Intn(100000), rand.Float32())
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		matrix.RandomEntry()
 	}
 }
