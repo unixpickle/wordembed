@@ -49,8 +49,8 @@ func (e *Embedding) EmbedID(id int) anyvec.Vector {
 }
 
 // Lookup finds the n closest token IDs to the given
-// vector, using the Euclidean distance.
-// For each ID, it also returns the Euclidean distance.
+// vector, using cosine similarity.
+// For each ID, it also returns the similarity.
 //
 // If n is greater than the number of IDs, then there will
 // be fewer than n results.
@@ -58,29 +58,32 @@ func (e *Embedding) Lookup(vec anyvec.Vector, n int) ([]int, []anyvec.Numeric) {
 	if vec.Len() != e.Vectors.Cols {
 		panic("incorrect vector length")
 	}
-	diffs := e.Vectors.Data.Copy()
-	c := diffs.Creator()
-	diffs.Scale(c.MakeNumeric(-1))
-	anyvec.AddRepeated(diffs, vec)
-	anyvec.Pow(diffs, c.MakeNumeric(2))
 
-	distances := anyvec.SumCols(diffs, e.Vectors.Rows)
-	maxVal := anyvec.AbsMax(distances)
-	distances.Scale(c.MakeNumeric(-1))
+	c := e.Vectors.Data.Creator()
+	squares := e.Vectors.Data.Copy()
+	anyvec.Pow(squares, c.MakeNumeric(2))
+	normalizers := anyvec.SumCols(squares, e.Vectors.Rows)
+	anyvec.Pow(normalizers, c.MakeNumeric(-0.5))
+
+	masked := e.Vectors.Data.Copy()
+	anyvec.ScaleChunks(masked, normalizers)
+	normVec := vec.Copy()
+	normVec.Scale(c.NumOps().Div(c.MakeNumeric(1), anyvec.Norm(vec)))
+	anyvec.ScaleRepeated(masked, normVec)
+
+	dots := anyvec.SumCols(masked, e.Vectors.Rows)
 
 	var ids []int
 	var dists []anyvec.Numeric
-	for i := 0; i < n && i < distances.Len(); i++ {
-		idx := anyvec.MaxIndex(distances)
+	for i := 0; i < n && i < dots.Len(); i++ {
+		idx := anyvec.MaxIndex(dots)
 		ids = append(ids, idx)
 
-		dist := anyvec.AbsMax(distances.Slice(idx, idx+1))
-		dist = c.NumOps().Pow(dist, c.MakeNumeric(0.5))
+		dist := anyvec.Sum(dots.Slice(idx, idx+1))
 		dists = append(dists, dist)
 
 		// Make sure we don't get this ID again.
-		smallVal := c.NumOps().Mul(maxVal, c.MakeNumeric(-2))
-		distances.Slice(idx, idx+1).AddScalar(smallVal)
+		dots.Slice(idx, idx+1).AddScalar(c.MakeNumeric(-3))
 	}
 	return ids, dists
 }
