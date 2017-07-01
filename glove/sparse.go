@@ -88,7 +88,7 @@ func (s *SparseMatrix) RandomEntry() (row, col int) {
 	idx := rand.Intn(numEntries)
 	for i, row := range s.Rows {
 		if idx < len(row.Indices) {
-			return i, row.Indices[idx]
+			return i, int(row.Indices[idx])
 		}
 		idx -= len(row.Indices)
 	}
@@ -120,7 +120,7 @@ type SparseVector struct {
 
 	// Indices stores the index of each non-zero value.
 	// Each index corresponds to an entry in Values.
-	Indices []int
+	Indices []int32
 
 	Values []float32
 }
@@ -142,8 +142,8 @@ func DeserializeSparseVector(d []byte) (*SparseVector, error) {
 
 // Get reads the entry at the index.
 func (s *SparseVector) Get(i int) float32 {
-	idx := sort.SearchInts(s.Indices, i)
-	if idx == len(s.Indices) || s.Indices[idx] != i {
+	idx := s.searchIndices(i)
+	if idx == len(s.Indices) || int(s.Indices[idx]) != i {
 		return 0
 	}
 	return s.Values[idx]
@@ -151,16 +151,16 @@ func (s *SparseVector) Get(i int) float32 {
 
 // Set sets the entry at the index.
 func (s *SparseVector) Set(i int, val float32) {
-	idx := sort.SearchInts(s.Indices, i)
+	idx := s.searchIndices(i)
 	if idx == len(s.Indices) {
-		s.Indices = append(s.Indices, i)
+		s.Indices = append(s.Indices, int32(i))
 		s.Values = append(s.Values, val)
-	} else if s.Indices[idx] != i {
+	} else if int(s.Indices[idx]) != i {
 		s.Indices = append(s.Indices, 0)
 		s.Values = append(s.Values, 0)
 		copy(s.Indices[idx+1:], s.Indices[idx:])
 		copy(s.Values[idx+1:], s.Values[idx:])
-		s.Indices[idx] = i
+		s.Indices[idx] = int32(i)
 		s.Values[idx] = val
 	} else {
 		s.Values[idx] = val
@@ -169,16 +169,16 @@ func (s *SparseVector) Set(i int, val float32) {
 
 // Add adds to the entry at the index.
 func (s *SparseVector) Add(i int, val float32) {
-	idx := sort.SearchInts(s.Indices, i)
+	idx := s.searchIndices(i)
 	if idx == len(s.Indices) {
-		s.Indices = append(s.Indices, i)
+		s.Indices = append(s.Indices, int32(i))
 		s.Values = append(s.Values, val)
-	} else if s.Indices[idx] != i {
+	} else if int(s.Indices[idx]) != i {
 		s.Indices = append(s.Indices, 0)
 		s.Values = append(s.Values, 0)
 		copy(s.Indices[idx+1:], s.Indices[idx:])
 		copy(s.Values[idx+1:], s.Values[idx:])
-		s.Indices[idx] = i
+		s.Indices[idx] = int32(i)
 		s.Values[idx] = val
 	} else {
 		s.Values[idx] += val
@@ -194,4 +194,10 @@ func (s *SparseVector) SerializerType() string {
 // Serialize serializes the SparseVector.
 func (s *SparseVector) Serialize() ([]byte, error) {
 	return serializer.SerializeAny(s.Len, s.Indices, s.Values)
+}
+
+func (s *SparseVector) searchIndices(index int) int {
+	return sort.Search(len(s.Indices), func(arg2 int) bool {
+		return int(s.Indices[arg2]) >= index
+	})
 }
