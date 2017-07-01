@@ -2,6 +2,7 @@ package glove
 
 import (
 	"math"
+	"runtime"
 	"sync"
 
 	"github.com/unixpickle/anydiff"
@@ -134,59 +135,23 @@ func NewTrainer(c anyvec.Creator, vecSize int, cooccur *SparseMatrix) *Trainer {
 	return res
 }
 
-// Update applies n updates to the model in parallel.
+// Update applies a mini-batch of n updates.
 // It returns the average cost for the mini-batch.
 func (t *Trainer) Update(n int) anyvec.Numeric {
 	var wg sync.WaitGroup
 	results := make(chan *trainerResult, n)
-
+	requests := make(chan struct{}, n)
 	for i := 0; i < n; i++ {
+		requests <- struct{}{}
+	}
+	close(requests)
+
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
-			ctxID, wordID := t.Cooccur.RandomEntry()
-
-			cooccur := t.Cooccur.Get(ctxID, wordID)
-			weighting := t.Weighter.Weight(float64(cooccur))
-
-			wordVec := anydiff.NewVar(extractRow(t.Vectors, wordID))
-			ctxVec := anydiff.NewVar(extractRow(t.CtxVectors, ctxID))
-			wordBias := anydiff.NewVar(t.Biases.Slice(wordID, wordID+1))
-			ctxBias := anydiff.NewVar(t.CtxBiases.Slice(ctxID, ctxID+1))
-
-			creator := wordVec.Vector.Creator()
-
-			cost := anydiff.Scale(
-				anydiff.Square(
-					anydiff.Add(
-						anydiff.Add(
-							anydiff.Dot(wordVec, ctxVec),
-							wordBias,
-						),
-						anydiff.AddScalar(
-							ctxBias,
-							creator.MakeNumeric(-math.Log(float64(cooccur))),
-						),
-					),
-				),
-				creator.MakeNumeric(weighting),
-			)
-
-			one := creator.MakeVectorData(
-				creator.MakeNumericList([]float64{1}),
-			)
-			grad := anydiff.NewGrad(cost.Vars().Slice()...)
-			cost.Propagate(one, grad)
-
-			results <- &trainerResult{
-				WordID:      wordID,
-				CtxID:       ctxID,
-				Cost:        cost.Output().Copy(),
-				Grad:        grad[wordVec].Copy(),
-				CtxGrad:     grad[ctxVec].Copy(),
-				BiasGrad:    grad[wordBias].Copy(),
-				CtxBiasGrad: grad[ctxBias].Copy(),
+			for _ = range requests {
+				results <- t.computeUpdate()
 			}
 		}()
 	}
@@ -202,8 +167,8 @@ func (t *Trainer) Update(n int) anyvec.Numeric {
 		} else {
 			totalCost.Add(result.Cost)
 		}
+		t.NumUpdates++
 	}
-	t.NumUpdates += n
 
 	totalCost.Scale(totalCost.Creator().MakeNumeric(1 / float64(n)))
 	return anyvec.Sum(totalCost)
@@ -256,6 +221,52 @@ func (t *Trainer) Serialize() ([]byte, error) {
 		&anyvecsave.S{Vector: t.AdaCtxBiases},
 		t.NumUpdates,
 	)
+}
+
+func (t *Trainer) computeUpdate() *trainerResult {
+	ctxID, wordID := t.Cooccur.RandomEntry()
+
+	cooccur := t.Cooccur.Get(ctxID, wordID)
+	weighting := t.Weighter.Weight(float64(cooccur))
+
+	wordVec := anydiff.NewVar(extractRow(t.Vectors, wordID))
+	ctxVec := anydiff.NewVar(extractRow(t.CtxVectors, ctxID))
+	wordBias := anydiff.NewVar(t.Biases.Slice(wordID, wordID+1))
+	ctxBias := anydiff.NewVar(t.CtxBiases.Slice(ctxID, ctxID+1))
+
+	creator := wordVec.Vector.Creator()
+
+	cost := anydiff.Scale(
+		anydiff.Square(
+			anydiff.Add(
+				anydiff.Add(
+					anydiff.Dot(wordVec, ctxVec),
+					wordBias,
+				),
+				anydiff.AddScalar(
+					ctxBias,
+					creator.MakeNumeric(-math.Log(float64(cooccur))),
+				),
+			),
+		),
+		creator.MakeNumeric(weighting),
+	)
+
+	one := creator.MakeVectorData(
+		creator.MakeNumericList([]float64{1}),
+	)
+	grad := anydiff.NewGrad(cost.Vars().Slice()...)
+	cost.Propagate(one, grad)
+
+	return &trainerResult{
+		WordID:      wordID,
+		CtxID:       ctxID,
+		Cost:        cost.Output().Copy(),
+		Grad:        grad[wordVec].Copy(),
+		CtxGrad:     grad[ctxVec].Copy(),
+		BiasGrad:    grad[wordBias].Copy(),
+		CtxBiasGrad: grad[ctxBias].Copy(),
+	}
 }
 
 func (t *Trainer) applyUpdate(r *trainerResult) {
