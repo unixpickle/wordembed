@@ -150,8 +150,9 @@ func (t *Trainer) Update(n int) anyvec.Numeric {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			picker := newRandomEntryPicker(t.Cooccur)
 			for _ = range requests {
-				results <- t.computeUpdate()
+				results <- t.computeUpdate(picker)
 			}
 		}()
 	}
@@ -223,8 +224,8 @@ func (t *Trainer) Serialize() ([]byte, error) {
 	)
 }
 
-func (t *Trainer) computeUpdate() *trainerResult {
-	ctxID, wordID := t.Cooccur.RandomEntry()
+func (t *Trainer) computeUpdate(picker *randomEntryPicker) *trainerResult {
+	ctxID, wordID := picker.Pick()
 
 	cooccur := t.Cooccur.Get(ctxID, wordID)
 	weighting := t.Weighter.Weight(float64(cooccur))

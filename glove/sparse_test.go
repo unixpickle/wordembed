@@ -40,15 +40,3 @@ func TestSparseMatrix(t *testing.T) {
 		}
 	}
 }
-
-func BenchmarkMatrixRandomEntry(b *testing.B) {
-	matrix := NewSparseMatrix(100000, 100000)
-	for i := 0; i < 100000; i++ {
-		matrix.Set(rand.Intn(100000), rand.Intn(100000), rand.Float32())
-	}
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		matrix.RandomEntry()
-	}
-}
