@@ -45,7 +45,7 @@ func (e *Embedding) Embed(token string) anyvec.Vector {
 
 // EmbedID returns the embedding for the token ID.
 func (e *Embedding) EmbedID(id int) anyvec.Vector {
-	return extractRow(e.Vectors, id)
+	return extractRow(e.Vectors, id).Copy()
 }
 
 // Lookup finds the n closest token IDs to the given
