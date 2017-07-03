@@ -67,6 +67,11 @@ func (t TokenSet) Token(id int) string {
 	return t[id]
 }
 
+// Contains checks if the token is in the set.
+func (t TokenSet) Contains(token string) bool {
+	return t.ID(token) != len(t)
+}
+
 // SerializerType returns the unique ID used to serialize
 // a TokenSet with the serializer package.
 func (t TokenSet) SerializerType() string {
