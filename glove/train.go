@@ -117,6 +117,7 @@ func NewTrainer(c anyvec.Creator, vecSize int, cooccur *SparseMatrix) *Trainer {
 	n := len(cooccur.Rows)
 	matrices := []**anyvec.Matrix{&res.Vectors, &res.CtxVectors, &res.AdaVectors,
 		&res.AdaCtxVectors}
+	initScaler := c.MakeNumeric(math.Sqrt(1 / float64(vecSize)))
 	for i, mat := range matrices {
 		*mat = &anyvec.Matrix{
 			Data: c.MakeVector(n * vecSize),
@@ -125,6 +126,7 @@ func NewTrainer(c anyvec.Creator, vecSize int, cooccur *SparseMatrix) *Trainer {
 		}
 		if i < 2 {
 			anyvec.Rand((*mat).Data, anyvec.Normal, nil)
+			(*mat).Data.Scale(initScaler)
 		}
 	}
 	biases := []*anyvec.Vector{&res.Biases, &res.CtxBiases, &res.AdaBiases,
