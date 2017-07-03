@@ -38,6 +38,17 @@ func DeserializeEmbedding(d []byte) (*Embedding, error) {
 	return &res, nil
 }
 
+// Nomalize makes all the vectors have the same magnitude.
+// This may improve performance on certain tasks.
+func (e *Embedding) Normalize() {
+	c := e.Vectors.Data.Creator()
+	squares := e.Vectors.Data.Copy()
+	anyvec.Pow(squares, c.MakeNumeric(2))
+	normalizers := anyvec.SumCols(squares, e.Vectors.Rows)
+	anyvec.Pow(normalizers, c.MakeNumeric(-0.5))
+	anyvec.ScaleChunks(e.Vectors.Data, normalizers)
+}
+
 // Embed returns the embedding for the token.
 func (e *Embedding) Embed(token string) anyvec.Vector {
 	return e.EmbedID(e.Tokens.ID(token))
