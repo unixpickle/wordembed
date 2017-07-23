@@ -99,6 +99,16 @@ func (e *Embedding) Lookup(vec anyvec.Vector, n int) ([]int, []anyvec.Numeric) {
 	return ids, dists
 }
 
+// Token returns the token for the word ID.
+func (e *Embedding) Token(id int) string {
+	return e.Tokens.Token(id)
+}
+
+// Dim returns the dimensionality of the embedding.
+func (e *Embedding) Dim() int {
+	return e.Vectors.Cols
+}
+
 // SerializerType returns the unique ID used to serialize
 // an Embedding with the serializer package.
 func (e *Embedding) SerializerType() string {
